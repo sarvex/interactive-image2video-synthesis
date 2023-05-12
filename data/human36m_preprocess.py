@@ -32,12 +32,19 @@ def md5(filename):
 
 
 def download_file(url, dest_file, phpsessid):
-    call(['axel',
-          '-a',
-          '-n', '24',
-          '-H', 'COOKIE: PHPSESSID=' + phpsessid,
-          '-o', dest_file,
-          url])
+    call(
+        [
+            'axel',
+            '-a',
+            '-n',
+            '24',
+            '-H',
+            f'COOKIE: PHPSESSID={phpsessid}',
+            '-o',
+            dest_file,
+            url,
+        ]
+    )
 
 def get_config():
     dirpath = path.dirname(path.realpath(__file__))
@@ -74,13 +81,13 @@ def download_all(phpsessid, out_dir):
             v, k = line.split('  ')
             checksums[k] = v
 
-    files = []
-    for subject_id, id in subjects:
-        files += [
-            ('Videos_{}.tgz'.format(subject_id),
-             'download=1&filepath=Videos&filename=SubjectSpecific_{}.tgz'.format(id)),
-        ]
-
+    files = [
+        (
+            f'Videos_{subject_id}.tgz',
+            f'download=1&filepath=Videos&filename=SubjectSpecific_{id}.tgz',
+        )
+        for subject_id, id in subjects
+    ]
     # out_dir = 'video_download'
     # makedirs(out_dir, exist_ok=True)
 
@@ -95,16 +102,13 @@ def download_all(phpsessid, out_dir):
             if checksums.get(out_file, None) == checksum:
                 continue
 
-        download_file(BASE_URL + '?' + query, out_file, phpsessid)
+        download_file(f'{BASE_URL}?{query}', out_file, phpsessid)
 
 # https://stackoverflow.com/a/6718435
 def commonprefix(m):
     s1 = min(m)
     s2 = max(m)
-    for i, c in enumerate(s1):
-        if c != s2[i]:
-            return s1[:i]
-    return s1
+    return next((s1[:i] for i, c in enumerate(s1) if c != s2[i]), s1)
 
 def extract_tgz(tgz_file, dest):
     # if path.exists(dest):

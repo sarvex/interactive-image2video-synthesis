@@ -7,10 +7,7 @@ from data.flow_dataset import PlantDataset
 class SequenceSampler(BatchSampler):
     def __init__(self, dataset:BaseDataset, batch_size, shuffle,  drop_last):
         assert isinstance(dataset, BaseDataset), "The used dataset in Sequence Sampler must inherit from BaseDataset"
-        if shuffle:
-            sampler = RandomSampler(dataset)
-        else:
-            sampler = SequentialSampler(dataset)
+        sampler = RandomSampler(dataset) if shuffle else SequentialSampler(dataset)
         super().__init__(sampler, batch_size, drop_last)
 
 
@@ -126,7 +123,7 @@ class SequenceLengthSampler(BatchSampler):
             appended = (n_frames, n_frames_actual)
         else:
             appended = (n_frames, None)
-        for idx in self.sampler:
+        for _ in self.sampler:
             appended = (appended[0] if self.n_frames is None else self.n_frames,appended[1])
             batch.append(appended)
             if len(batch) == self.batch_size:

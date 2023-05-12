@@ -18,11 +18,7 @@ from torch import nn
 
 
 def get_member(model, name):
-    if isinstance(model, nn.DataParallel):
-        module = model.module
-    else:
-        module = model
-
+    module = model.module if isinstance(model, nn.DataParallel) else model
     return getattr(module, name)
 
 
@@ -42,8 +38,7 @@ def convert_flow_2d_to_3d_batch(flows):
     for flow in flows:
         converted = convert_flow_2d_to_3d(flow)
         final.append(converted[None])
-    final = torch.cat(final, dim=0)
-    return final
+    return torch.cat(final, dim=0)
 
 def get_flow_gradients(flow, device=None):
     """torch in, torch out"""
@@ -78,8 +73,7 @@ def get_flow_gradients_batch(flows):
                          gradient_d2_y]
         stacked = torch.stack(all_gradients, dim=0).squeeze(dim=0)
         final.append(stacked)
-    final = torch.stack(final, dim=0).squeeze(dim=0)
-    return final
+    return torch.stack(final, dim=0).squeeze(dim=0)
 
 class LoggingParent:
     def __init__(self):
@@ -97,7 +91,7 @@ class LoggingParent:
                 found = True
                 continue
             mypath = "/".join(mypath.split("/")[:-1])
-        project_root = mypath+"/"
+        project_root = f"{mypath}/"
         # Put it together
         file = inspect.getfile(self.__class__).replace(project_root, "").replace("/", ".").split(".py")[0]
         cls = str(self.__class__)[8:-2]
@@ -140,7 +134,7 @@ def save_model_to_disk(path, models, epoch):
         tmp_path = path
         if not os.path.exists(path):
             os.makedirs(path)
-        tmp_path = tmp_path + f"model_{i}-epoch{epoch}"
+        tmp_path = f"{tmp_path}model_{i}-epoch{epoch}"
         torch.save(model.state_dict(), tmp_path)
 
 
@@ -165,13 +159,10 @@ def parallel_data_prefetch(
     elif isinstance(data, abc.Iterable):
         if isinstance(data, dict):
             print(
-                f'WARNING:"data" argument passed to parallel_data_prefetch is a dict: Using only its values and disregarding keys.'
+                'WARNING:"data" argument passed to parallel_data_prefetch is a dict: Using only its values and disregarding keys.'
             )
             data = list(data.values())
-        if target_data_type == "ndarray":
-            data = np.asarray(data)
-        else:
-            data = list(data)
+        data = np.asarray(data) if target_data_type == "ndarray" else list(data)
     else:
         raise TypeError(
             f"The data, that shall be processed parallel has to be either an np.ndarray or an Iterable, but is actually {type(data)}."
@@ -198,7 +189,7 @@ def parallel_data_prefetch(
         arguments = [
             [func, Q, part, i]
             for i, part in enumerate(
-                [data[i : i + step] for i in range(0, len(data), step)]
+                data[i : i + step] for i in range(0, len(data), step)
             )
         ]
     processes = []
@@ -207,7 +198,7 @@ def parallel_data_prefetch(
         processes += [p]
 
     # start processes
-    print(f"Start prefetching...")
+    print("Start prefetching...")
     import time
 
     start = time.time()

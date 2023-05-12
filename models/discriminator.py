@@ -25,7 +25,7 @@ class GANTrainer(object):
             self.load_key = "disc_temp"
             self.postfix = "temp"
             if self.disc.cond:
-                self.logger.info(f"Using Conditional temporal discriminator.")
+                self.logger.info("Using Conditional temporal discriminator.")
         else:
             self.key = "gan"
             self.disc = PatchDiscriminator(self.config[self.key])
@@ -44,7 +44,7 @@ class GANTrainer(object):
         if self.config["general"]["restart"] and not debug:
             disc_ckpt, disc_op_ckpt = load_fn(key=self.load_key)
             if disc_ckpt is not None:
-                self.logger.info(f"Resuming training of discriminator...loading weights.")
+                self.logger.info("Resuming training of discriminator...loading weights.")
                 self.disc.load_state_dict(disc_ckpt)
 
         if self.parallel:
@@ -162,7 +162,7 @@ class PatchDiscriminator(nn.Module):
         n_d = ndf * nf_mult
         if deep_disc:
             n_max = 1024
-            for i in range(n_deep_layers):
+            for _ in range(n_deep_layers):
                 # add one layer to the original patch discrminator to make it more powerful
                 self.layers.append(nn.Conv2d(n_d, min(n_max, n_d*2), kernel_size=kw, stride=1, padding=padw, bias=use_bias))
                 self.norms.append(norm_layer(min(n_max, n_d*2)))
@@ -186,12 +186,11 @@ class PatchDiscriminator(nn.Module):
             # vanilla gan loss
             return self.bce(pred, torch.ones_like(pred) if real else torch.zeros_like(pred))
         else:
-            # hinge loss
-            if real:
-                l = torch.mean(torch.nn.ReLU()(1.0 - pred))
-            else:
-                l = torch.mean(torch.nn.ReLU()(1.0 + pred))
-            return l
+            return (
+                torch.mean(torch.nn.ReLU()(1.0 - pred))
+                if real
+                else torch.mean(torch.nn.ReLU()(1.0 + pred))
+            )
 
     def gp(self, pred_fake, x_fake):
         batch_size = x_fake.size(0)
@@ -201,8 +200,7 @@ class PatchDiscriminator(nn.Module):
         )[0]
         grad_dout2 = grad_dout.pow(2)
         assert (grad_dout2.size() == x_fake.size())
-        reg = grad_dout2.view(batch_size, -1).sum(1)
-        return reg
+        return grad_dout2.view(batch_size, -1).sum(1)
 
     def fmap_loss(self, fmap1, fmap2, loss="l1"):
         recp_loss = 0
@@ -220,22 +218,19 @@ class PatchDiscriminator(nn.Module):
 def resnet10(**kwargs):
     """Constructs a ResNet-10 model.
     """
-    model = ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)
-    return model
+    return ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)
 
 
 def resnet(**kwargs):
     """Constructs a ResNet-18 model.
     """
-    model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
-    return model
+    return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
 
 
 def resnet34(**kwargs):
     """Constructs a ResNet-34 model.
     """
-    model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
-    return model
+    return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
 
 
 def conv3x3x3(in_planes, out_planes, stride=1, stride_t=1):
@@ -353,21 +348,17 @@ class ResNet(nn.Module):
                     padding=[1, 1, 1],
                     bias=False)),
                 nn.GroupNorm(num_channels=planes * block.expansion, num_groups=16))
-        layers = []
-        layers.append(block(self.inplanes, planes, stride, stride_t, downsample))
+        layers = [block(self.inplanes, planes, stride, stride_t, downsample)]
         self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
+        layers.extend(block(self.inplanes, planes) for _ in range(1, blocks))
         return nn.Sequential(*layers)
     def forward(self, x, cond=None):
-        out = []
         x = self.conv1(x)
         x = self.gn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
         x = self.layer1(x)
-        out.append(x)
-
+        out = [x]
         for n in range(len(self.layers)):
             x = self.layers[n](x)
             out.append(x)
@@ -375,16 +366,15 @@ class ResNet(nn.Module):
 
         if self.patch_temp:
             if self.cond:
-                x_norm = []
-                for i in range(x.size(2)):
-                    x_norm.append(self.spade_emb(x[:,:,i],cond))
+                x_norm = [self.spade_emb(x[:,:,i],cond) for i in range(x.size(2))]
                 x_norm = torch.stack(x_norm,2)
             else:
                 x_norm = x
             x1 = self.avgpool(x_norm)
-            output = []
-            for i in range(x1.size(2)):
-                output.append(self.fc(x1[:,:,i].reshape(x1.size(0), -1)))
+            output = [
+                self.fc(x1[:, :, i].reshape(x1.size(0), -1))
+                for i in range(x1.size(2))
+            ]
             return torch.cat(output, dim=1), out
         else:
 
@@ -399,12 +389,11 @@ class ResNet(nn.Module):
             # vanilla gan loss
             return self.bce(pred, torch.ones_like(pred) if real else torch.zeros_like(pred))
         else:
-            # hinge loss
-            if real:
-                l = torch.mean(torch.nn.ReLU()(1.0 - pred))
-            else:
-                l = torch.mean(torch.nn.ReLU()(1.0 + pred))
-            return l
+            return (
+                torch.mean(torch.nn.ReLU()(1.0 - pred))
+                if real
+                else torch.mean(torch.nn.ReLU()(1.0 + pred))
+            )
 
     def gp(self, pred_fake, x_fake):
         batch_size = x_fake.size(0)
@@ -414,8 +403,7 @@ class ResNet(nn.Module):
         )[0]
         grad_dout2 = grad_dout.pow(2)
         assert (grad_dout2.size() == x_fake.size())
-        reg = grad_dout2.view(batch_size, -1).sum(1)
-        return reg
+        return grad_dout2.view(batch_size, -1).sum(1)
 
     def fmap_loss(self, fmap1, fmap2, loss="l1"):
         recp_loss = 0
@@ -438,8 +426,5 @@ if __name__ == '__main__':
     model = resnet(config=config,spatial_size=128, sequence_length=dummy.shape[2]).cuda()
     print("Number of parameters in generator", sum(p.numel() for p in model.parameters()))
 
-    if config["conditional"]:
-        out, out2 = model(dummy,dummy_cond)
-    else:
-        out, out2,= model(dummy)
+    out, out2, = model(dummy,dummy_cond) if config["conditional"] else model(dummy)
     test = 1

@@ -73,24 +73,20 @@ class Experiment:
 
                 # load latest stored checkpoint
                 ckpts = [ckpt for ckpt in ckpts if key in ckpt.split("/")[-1]]
-                if len(ckpts) == 0:
-                    self.logger.info(f"*************No ckpt found****************")
+                if not ckpts:
+                    self.logger.info("*************No ckpt found****************")
                     op_ckpt = mod_ckpt = None
                     return mod_ckpt, op_ckpt
                 if use_best:
                     ckpts = [x for x in glob(path.join(dir,"*.pt")) if "=" in x.split("/")[-1]]
                     ckpts = {float(x.split("=")[-1].split(".")[0]): x for x in ckpts}
 
-                    ckpt = torch.load(
-                        ckpts[max(list(ckpts.keys()))], map_location="cpu"
-                    )
                 else:
                     ckpts = {float(x.split("_")[-1].split(".")[0]): x for x in ckpts}
 
-                    ckpt = torch.load(
-                        ckpts[max(list(ckpts.keys()))], map_location="cpu"
-                    )
-
+                ckpt = torch.load(
+                    ckpts[max(list(ckpts.keys()))], map_location="cpu"
+                )
                 mod_ckpt = ckpt[load_name] if load_name in ckpt else None
                 if single_opt:
                     key = [key for key in ckpt if key.startswith("optimizer")]
@@ -113,8 +109,6 @@ class Experiment:
                     self.logger.info(f"*************No ckpt for optimizer with key {key} found, not restoring...****************")
             else:
                 mod_ckpt = op_ckpt = None
-
-            return mod_ckpt, op_ckpt
 
         else:
             # fixme add checkpoint loading for best performing models
@@ -145,7 +139,8 @@ class Experiment:
                 else:
                     self.logger.info(f"*************No ckpt for optimizer found under {ckpt_path}, not restoring...****************")
 
-            return mod_ckpt,op_ckpt
+
+        return mod_ckpt, op_ckpt
 
     @abstractmethod
     def train(self):

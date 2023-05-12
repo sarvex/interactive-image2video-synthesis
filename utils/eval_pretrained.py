@@ -20,13 +20,12 @@ def load_parameters(model_name, base_dir):
     dir_structure = create_dir_structure(model_name, base_dir)
     saved_config = path.join(dir_structure["config"], "config.yaml")
 
-    if path.isfile(saved_config):
-        with open(saved_config, "r") as f:
-            cdict = yaml.load(f, Loader=yaml.FullLoader)
-    else:
+    if not path.isfile(saved_config):
         raise FileNotFoundError("No saved config file found but model is intended to be restarted. Aborting....")
 
 
+    with open(saved_config, "r") as f:
+        cdict = yaml.load(f, Loader=yaml.FullLoader)
     return cdict, dir_structure,
 
 if __name__ == '__main__':

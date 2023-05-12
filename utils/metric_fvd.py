@@ -51,7 +51,7 @@ if __name__ == '__main__':
             context = int(real_samples.split("/")[-1].split(".npy")[0].split("_")[-1])
             logger.info(f"processing samples of length {length} with {context} context frames.")
         except:
-            logger.info(f"Processing standard samples")
+            logger.info("Processing standard samples")
 
         real_samples = np.load(real_samples)
         fake_samples = np.load(fake_samples)

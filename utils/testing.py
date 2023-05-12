@@ -59,16 +59,14 @@ def make_flow_grid(src, poke, pred, tgt, n_logged, flow=None):
         # additional = additional + [np.concatenate([a for a in add], axis=1)]
         add = vis_flow(flow[:n_logged])
         add = np.concatenate(add,axis=1)
-        additional = additional + [add]
-        # compute ssim_img in grayscale
+        additional += [add]
+            # compute ssim_img in grayscale
 
-    src = np.concatenate([s for s in src], axis=1)
+    src = np.concatenate(list(src), axis=1)
     #poke = np.concatenate([f for f in poke], axis=1)
-    pred = np.concatenate([p for p in pred], axis=1)
-    tgt = np.concatenate([t for t in tgt], axis=1)
-    grid = np.concatenate([src,poke,pred,tgt,*additional],axis=0)
-
-    return grid
+    pred = np.concatenate(list(pred), axis=1)
+    tgt = np.concatenate(list(tgt), axis=1)
+    return np.concatenate([src,poke,pred,tgt,*additional],axis=0)
 
 def vis_flow(flow_map, normalize=False):
     if isinstance(flow_map,torch.Tensor):
@@ -193,8 +191,7 @@ def draw_arrow(traj):
 
         arrow_imgs.append(img)
 
-    arrow_imgs = np.concatenate(arrow_imgs,axis=1)
-    return arrow_imgs
+    return np.concatenate(arrow_imgs,axis=1)
 
 
 def img_grid_ci(src,traj,pred,tgt,n_logged):
@@ -207,21 +204,26 @@ def img_grid_ci(src,traj,pred,tgt,n_logged):
     tgt = ((tgt.permute(0, 2, 3, 1).cpu().numpy()) * 255).astype(
         np.uint8)[:n_logged]
 
-    src = np.concatenate([s for s in src], axis=1)
+    src = np.concatenate(list(src), axis=1)
     # poke = np.concatenate([f for f in poke], axis=1)
-    pred = np.concatenate([p for p in pred], axis=1)
-    tgt = np.concatenate([t for t in tgt], axis=1)
+    pred = np.concatenate(list(pred), axis=1)
+    tgt = np.concatenate(list(tgt), axis=1)
 
     arrows = draw_arrow(traj[:n_logged].cpu().numpy())
-    grid = np.concatenate([src, arrows, pred, tgt], axis=0)
-
-    return grid
+    return np.concatenate([src, arrows, pred, tgt], axis=0)
 
 
 def make_video_ci(src,traj,pred,tgt,n_logged,logwandb=True, display_frame_nr=True):
     seq_len = tgt.shape[1]
 
-    srcs = np.concatenate([s for s in ((src.permute(0, 2, 3, 1).cpu().numpy()) * 255.).astype(np.uint8)[:n_logged]],axis=1)
+    srcs = np.concatenate(
+        list(
+            ((src.permute(0, 2, 3, 1).cpu().numpy()) * 255.0).astype(np.uint8)[
+                :n_logged
+            ]
+        ),
+        axis=1,
+    )
 
     traj_vis = []
     for t in range(traj.shape[1]):
@@ -277,7 +279,7 @@ def make_video(src,poke,pred,tgt,n_logged,flow=None,length_divisor=5,logwandb=Tr
     if flow is not None:
         flows = vis_flow(flow[:n_logged])
         flows_with_rect = []
-        for i,(poke_p,flow) in enumerate(zip(pokes,flows)):
+        for poke_p, flow in zip(pokes,flows):
             poke_points = np.nonzero(poke_p.any(-1) > 0)
             if poke_points[0].size == 0:
                 flows_with_rect.append(np.zeros_like(flow))
@@ -301,7 +303,7 @@ def make_video(src,poke,pred,tgt,n_logged,flow=None,length_divisor=5,logwandb=Tr
     if flow_weights is not None:
         flow_weights = flow_weights.cpu().numpy()
         heatmaps = []
-        for i, weight in enumerate(flow_weights):
+        for weight in flow_weights:
             weight_map = ((weight - weight.min()) / weight.max() * 255.).astype(np.uint8)
             heatmap = cv2.applyColorMap(weight_map, cv2.COLORMAP_HOT)
             heatmap = cv2.cvtColor(heatmap, cv2.COLOR_RGB2BGR)
@@ -433,7 +435,7 @@ def make_animated_grid(src, poke, pred, tgt, n_logged, flow=None, length_divisor
     if flow is not None:
         flows = vis_flow(flow[:n_logged])
         flows_with_rect = []
-        for i,(poke_p,flow) in enumerate(zip(pokes,flows)):
+        for poke_p, flow in zip(pokes,flows):
             poke_points = np.nonzero(poke_p.any(-1) > 0)
             min_y = np.amin(poke_points[0])
             max_y = np.amax(poke_points[0])
@@ -521,10 +523,9 @@ def make_generic_grid(data, dtype, n_logged):
             image /= image.max(axis=0)
             image = (image[:, :, :, None]*255.0).astype(np.uint8)
             image = np.repeat(image, 3, axis=-1)
-        image = np.concatenate([s for s in image], axis=1)
+        image = np.concatenate(list(image), axis=1)
         final_data.append(image)
-    grid = np.concatenate(final_data, axis=0)
-    return grid
+    return np.concatenate(final_data, axis=0)
 
 def make_img_grid(appearance, shape, pred, tgt= None, n_logged=4, target_label="Target Images",
                   label_app = "Appearance Images", label_gen = "Generated Images", label_shape = "Shape Images"):
@@ -543,26 +544,26 @@ def make_img_grid(appearance, shape, pred, tgt= None, n_logged=4, target_label="
     if tgt is not None:
         tgt = ((tgt.permute(0, 2, 3, 1).cpu().numpy() + 1.) * 127.5).astype(
             np.uint8)[:n_logged]
-        tgt = np.concatenate([t for t in tgt], axis=1)
+        tgt = np.concatenate(list(tgt), axis=1)
         tgt = cv2.UMat.get(cv2.putText(cv2.UMat(tgt), target_label , (int(tgt.shape[1] // 3), tgt.shape[0] - int(tgt.shape[0]/6)), cv2.FONT_HERSHEY_SIMPLEX,
                                                   float(tgt.shape[0] / 256), (255, 0, 0), int(tgt.shape[0] / 128)))
 
-    appearance = np.concatenate([s for s in appearance], axis=1)
+    appearance = np.concatenate(list(appearance), axis=1)
     appearance = cv2.UMat.get(cv2.putText(cv2.UMat(appearance),label_app, (int(appearance.shape[1] // 3), appearance.shape[0] - int(appearance.shape[0]/6)), cv2.FONT_HERSHEY_SIMPLEX,
                                                   float(appearance.shape[0] / 256), (255, 0, 0), int(appearance.shape[0] / 128)))
-    shape = np.concatenate([f for f in shape], axis=1)
+    shape = np.concatenate(list(shape), axis=1)
     shape = cv2.UMat.get(cv2.putText(cv2.UMat(shape), label_shape, (int(shape.shape[1] // 3), shape.shape[0] - int(shape.shape[0]/6)), cv2.FONT_HERSHEY_SIMPLEX,
                                                   float(shape.shape[0] / 256), (255, 0, 0), int(shape.shape[0] / 128)))
-    pred = np.concatenate([p for p in pred], axis=1)
+    pred = np.concatenate(list(pred), axis=1)
     pred = cv2.UMat.get(cv2.putText(cv2.UMat(pred), label_gen, (int(pred.shape[1] // 3), pred.shape[0] - int(pred.shape[0]/6)), cv2.FONT_HERSHEY_SIMPLEX,
                                                   float(pred.shape[0] / 256), (255, 0, 0), int(pred.shape[0] / 128)))
 
 
-    if tgt is None:
-        grid = np.concatenate([appearance, shape, pred], axis=0)
-    else:
-        grid = np.concatenate([appearance, shape, pred, tgt], axis=0)
-    return grid
+    return (
+        np.concatenate([appearance, shape, pred], axis=0)
+        if tgt is None
+        else np.concatenate([appearance, shape, pred, tgt], axis=0)
+    )
 
 
 def scale_img(img):
@@ -572,12 +573,11 @@ def scale_img(img):
     :return:
     """
     img = (img + 1.) * 127.5
-    if isinstance(img, torch.Tensor):
-        img = img.to(torch.uint8)
-    else:
-        # assumed to be numpy array
-        img = img.astype(np.uint8)
-    return img
+    return (
+        img.to(torch.uint8)
+        if isinstance(img, torch.Tensor)
+        else img.astype(np.uint8)
+    )
 
 def human_graph_cut_map(img, poke_size):
     import cv2
@@ -595,16 +595,7 @@ def human_graph_cut_map(img, poke_size):
 
     mask2, fgm, bgm = cv2.grabCut(img, mask, rect, fgm, bgm, 5, cv2.GC_INIT_WITH_RECT)
     mask3 = np.where((mask2 == 2) | (mask2 == 0), 0, 1).astype(np.bool)
-    tuples = np.where(mask3[:, :])
-    return tuples
-
-    new_img = np.zeros_like(img)
-    for t in tuples:
-        for i in range(3):
-            new_img[t[0], t[1], i] = 255
-    # show the output frame
-    plt.imshow(new_img)
-    plt.show()
+    return np.where(mask3[:, :])
 
 
 # human_NN_map_weights = "/export/home/jsieber/poking/models/mask-rcnn-coco/frozen_inference_graph.pb"
@@ -749,12 +740,12 @@ if __name__=="__main__":
     frame = imutils.resize(frame, width=128)
 
     import time
-    for i in range(3):
+    for _ in range(3):
         start_time = time.time()
         human_graph_cut_map(frame, 15)
-        print("--- %s seconds ---" % (time.time() - start_time))
+        print(f"--- {time.time() - start_time} seconds ---")
 
-    for i in range(3):
+    for _ in range(3):
         start_time = time.time()
         human_NN_map(frame)
-        print("--- %s secondss ---" % (time.time() - start_time))
+        print(f"--- {time.time() - start_time} secondss ---")

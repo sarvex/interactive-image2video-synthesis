@@ -32,17 +32,6 @@ class ResBlock(nn.Module):
                 snorm= snorm
             )
 
-            self.conv2 = Conv2dBlock(
-                dim_out,
-                dim_out,
-                3,
-                1,
-                1,
-                norm=self.norm,
-                activation="none",
-                pad_type=pad_type,
-                snorm=snorm
-            )
         else:
             self.conv1 = Conv2dBlock(
                 dim_in,
@@ -56,18 +45,17 @@ class ResBlock(nn.Module):
                 snorm=snorm
             )
 
-            self.conv2 = Conv2dBlock(
-                dim_out,
-                dim_out,
-                3,
-                1,
-                1,
-                norm=self.norm,
-                activation="none",
-                pad_type=pad_type,
-                snorm=snorm
-            )
-
+        self.conv2 = Conv2dBlock(
+            dim_out,
+            dim_out,
+            3,
+            1,
+            1,
+            norm=self.norm,
+            activation="none",
+            pad_type=pad_type,
+            snorm=snorm
+        )
         self.convolve_res = dim_in != dim_out or upsampling or stride != 1
         if self.convolve_res:
             if not upsampling:
@@ -119,7 +107,7 @@ class Conv2dBlock(nn.Module):
         elif pad_type == "zero":
             self.pad = nn.ZeroPad2d(padding)
         else:
-            assert 0, "Unsupported padding type: {}".format(pad_type)
+            assert 0, f"Unsupported padding type: {pad_type}"
 
         # initialize normalization
         norm_dim = out_dim
@@ -134,7 +122,7 @@ class Conv2dBlock(nn.Module):
         elif norm == "none":
             self.norm = None
         else:
-            assert 0, "Unsupported normalization: {}".format(norm)
+            assert 0, f"Unsupported normalization: {norm}"
 
         # initialize activation
         if activation == "relu":
@@ -148,7 +136,7 @@ class Conv2dBlock(nn.Module):
         elif activation == "none":
             self.activation = None
         else:
-            assert 0, "Unsupported activation: {}".format(activation)
+            assert 0, f"Unsupported activation: {activation}"
         if snorm:
             self.conv = spectral_norm(nn.Conv2d(in_dim, out_dim, ks, st, bias=self.use_bias))
         else:
@@ -232,7 +220,7 @@ class Conv2dTransposeBlock(nn.Module):
         elif norm == "none":
             self.norm = None
         else:
-            assert 0, "Unsupported normalization: {}".format(norm)
+            assert 0, f"Unsupported normalization: {norm}"
 
         # initialize activation
         if activation == "elu":
@@ -244,7 +232,7 @@ class Conv2dTransposeBlock(nn.Module):
         elif activation == "none":
             self.activation = None
         else:
-            assert 0, "Unsupported activation: {}".format(activation)
+            assert 0, f"Unsupported activation: {activation}"
         if snorm:
             self.conv = spectral_norm(nn.ConvTranspose2d(in_dim, out_dim, ks, st, bias=self.use_bias, padding=padding, output_padding=padding))
         else:
@@ -297,7 +285,7 @@ class AdaptiveInstanceNorm2d(nn.Module):
         return out.view(b, c, *x.size()[2:])
 
     def __repr__(self):
-        return self.__class__.__name__ + "(" + str(self.num_features) + ")"
+        return f"{self.__class__.__name__}({str(self.num_features)})"
 
 
 class AdaINLinear(nn.Module):
@@ -368,9 +356,7 @@ class ConvGRUCell(nn.Module):
         update = torch.sigmoid(self.update_gate(stacked_inputs))
         reset = torch.sigmoid(self.reset_gate(stacked_inputs))
         out_inputs = torch.tanh(self.out_gate(torch.cat([input_, prev_state * reset], dim=1)))
-        new_state = prev_state * (1 - update) + out_inputs * update
-
-        return new_state
+        return prev_state * (1 - update) + out_inputs * update
 
 
 class ConvGRU(nn.Module):
@@ -409,11 +395,7 @@ class ConvGRU(nn.Module):
 
         self.cells = []
         for i in range(self.n_layers):
-            if i == 0:
-                input_dim = self.input_size
-            else:
-                input_dim = self.hidden_sizes[i - 1]
-
+            input_dim = self.input_size if i == 0 else self.hidden_sizes[i - 1]
             self.cells.append(ConvGRUCell(input_dim, self.hidden_sizes[i], self.kernel_sizes[i],upsample=upsampling[i]))
 
         self.cells = nn.Sequential(*self.cells)
@@ -477,8 +459,9 @@ class SPADE(nn.Module):
         elif param_free_norm_type == 'batch':
             self.param_free_norm = nn.BatchNorm2d(norm_nc, affine=False)
         else:
-            raise ValueError('%s is not a recognized param-free norm type in SPADE'
-                             % param_free_norm_type)
+            raise ValueError(
+                f'{param_free_norm_type} is not a recognized param-free norm type in SPADE'
+            )
 
         # The dimension of the intermediate embedding space. Yes, hardcoded.
         nhidden = 128
@@ -502,7 +485,4 @@ class SPADE(nn.Module):
         gamma = self.mlp_gamma(actv)
         beta = self.mlp_beta(actv)
 
-        # apply scale and bias
-        out = normalized * (1 + gamma) + beta
-
-        return out
+        return normalized * (1 + gamma) + beta

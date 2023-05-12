@@ -39,11 +39,7 @@ class FIDInceptionModel(nn.Module):
 
     def forward(self, x):
         x = self.resize(x)
-        if self.normalize_range:
-            # normalize in between 0 and 1
-            x = (x + 1.) / 2.
-        else:
-            x = x.to(torch.float) / 255.
+        x = (x + 1.) / 2. if self.normalize_range else x.to(torch.float) / 255.
         # normalize to demanded values
         x = (x - self.mean) / self.std
 
@@ -52,7 +48,7 @@ class FIDInceptionModel(nn.Module):
             x = submodule(x)
             if name == "Mixed_7c":
                 break
-            elif name == "Conv2d_4a_3x3" or name == "Conv2d_2b_3x3":
+            elif name in ["Conv2d_4a_3x3", "Conv2d_2b_3x3"]:
                 x = F.avg_pool2d(x, kernel_size=3, stride=2)
 
         out = F.adaptive_avg_pool2d(x, (1, 1))
@@ -115,15 +111,11 @@ def metric_ssim(real, fake, reduce = True, return_per_frame=False):
         #                          multichannel=True, data_range=1., gaussian_weights=True, use_sample_covariance=False)]) for i in range(real.shape[1])}
 
     if reduce:
-        if return_per_frame:
-            ssim_pf_reduced = {key: ssim_per_frame[key] for key in ssim_per_frame}
-            return np.mean(ssim_batch), ssim_pf_reduced
-        else:
+        if not return_per_frame:
             return np.mean(ssim_batch)
-    if return_per_frame:
-        return ssim_batch, ssim_per_frame
-    else:
-        return ssim_batch
+        ssim_pf_reduced = {key: ssim_per_frame[key] for key in ssim_per_frame}
+        return np.mean(ssim_batch), ssim_pf_reduced
+    return (ssim_batch, ssim_per_frame) if return_per_frame else ssim_batch
 
 def ssim_lightning(real, fake, return_per_frame=False, normalize_range=True):
     if real.dim() == 3:
@@ -183,15 +175,11 @@ def metric_psnr(im_true, im_test,reduce = True, return_per_frame=False):
 
 
     if reduce:
-        if return_per_frame:
-            psnr_pf_reduced = {key: psnr_per_frame[key] for key in psnr_per_frame}
-            return np.mean(psnr_batch), psnr_pf_reduced
-        else:
+        if not return_per_frame:
             return np.mean(psnr_batch)
-    if return_per_frame:
-        return psnr_batch, psnr_per_frame
-    else:
-        return psnr_batch
+        psnr_pf_reduced = {key: psnr_per_frame[key] for key in psnr_per_frame}
+        return np.mean(psnr_batch), psnr_pf_reduced
+    return (psnr_batch, psnr_per_frame) if return_per_frame else psnr_batch
 
 def metric_lpips(real, fake, lpips_func, reduce=True, return_per_frame=False, normalize=False):
     if real.dim() == 3:
@@ -213,16 +201,12 @@ def metric_lpips(real, fake, lpips_func, reduce=True, return_per_frame=False, no
         lpips_per_frame = {i: lpips_func(real[:,i],fake[:,i]).squeeze().cpu().numpy() for i in range(real.shape[1])}
 
     if reduce:
-        if return_per_frame:
-            lpips_pf_reduced = {key: lpips_per_frame[key].mean() for key in lpips_per_frame}
-            return lpips_batch.mean(), lpips_pf_reduced
-        else:
+        if not return_per_frame:
             return lpips_batch.mean()
 
-    if return_per_frame:
-        return lpips_batch, lpips_per_frame
-    else:
-        return lpips_batch
+        lpips_pf_reduced = {key: lpips_per_frame[key].mean() for key in lpips_per_frame}
+        return lpips_batch.mean(), lpips_pf_reduced
+    return (lpips_batch, lpips_per_frame) if return_per_frame else lpips_batch
 
 
 def mean_cov(features):

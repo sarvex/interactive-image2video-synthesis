@@ -48,7 +48,7 @@ class OscillatorModel(nn.Module):
         sigmas_hat_out = []
 
 
-        if target_img==None:
+        if target_img is None:
             target_img = input_img
 
         if self.reparamterize:
@@ -111,9 +111,7 @@ class SAVPArchModel(nn.Module):
         # encode dynamics
         delta = self.dynamics_enc(poke)[0]
 
-        out = self.gen(img,delta,len)
-
-        return out
+        return self.gen(img,delta,len)
 
 class SAVPGenerator(nn.Module):
     def __init__(self, poke_every):
@@ -175,8 +173,7 @@ class SAVPGenerator(nn.Module):
             x = self.conv_out(self.up3(x2dr))
             out_imgs.append(x)
 
-        out_imgs = torch.stack(out_imgs,1)
-        return out_imgs
+        return torch.stack(out_imgs,1)
 
 
 class ForegroundBackgroundModel(nn.Module):
@@ -234,7 +231,7 @@ class ForegroundBackgroundModel(nn.Module):
             sigma_n = self.shape_enc(x)[0]
             sigma_bg = self.shape_enc(bg_img)[1]
 
-            for n in range(len):
+            for _ in range(len):
                 # apply fusion block: input is delta, hidden states are the sigma_n
                 sigma_n.reverse()
                 sigma_n = self.fusion_block(delta, sigma_n)
@@ -348,11 +345,10 @@ class SkipSequenceModel(nn.Module):
                     else:
                         delta_in = delta_scaling[n] * delta_in
 
+                elif poke_jump:
+                    delta_in = delta if n < len -n_zero_frames else torch.zeros_like(delta)
                 else:
-                    if poke_jump:
-                        delta_in = delta if n < len -n_zero_frames else torch.zeros_like(delta)
-                    else:
-                        delta_in = delta if self.poke_every_t else (delta if n == 0 else torch.zeros_like(delta))
+                    delta_in = delta if self.poke_every_t else (delta if n == 0 else torch.zeros_like(delta))
                 sigma_n = self.fusion_block(delta_in, sigma_n)
                 sigma_n.reverse()
 
@@ -500,7 +496,7 @@ class ResidualSequenceBaseline(nn.Module):
             delta = self.dynamics_enc(poke)[0]
             delta = torch.stack([delta]*self.n_gru_layers)
 
-            for n in range(len):
+            for _ in range(len):
                 # shape encoding
                 sigma_n = self.shape_enc(x)[0]
 
@@ -657,9 +653,7 @@ class LearnedFusionBlock(nn.Module):
         assert n_blocks >= 1
         blocks = [ResBlock(2*nf,nf)]
 
-        for i in range(1,n_blocks):
-            blocks.append(ResBlock(nf,nf))
-
+        blocks.extend(ResBlock(nf,nf) for _ in range(1,n_blocks))
         self.model = nn.Sequential(*blocks)
     def forward(self,sigma,delta):
         x = torch.cat([sigma,delta],dim=1)
@@ -717,11 +711,7 @@ class VariationalSkipConnectionEncoderFGBG(nn.Module):
         self.n_stages = n_stages
         self.depths = []
         self.downs = []
-        if nf_first is None:
-            nf = 64
-        else:
-            nf = nf_first
-
+        nf = 64 if nf_first is None else nf_first
         # required
 
         self.blocks.append(
@@ -731,7 +721,7 @@ class VariationalSkipConnectionEncoderFGBG(nn.Module):
         )
         self.n_skip_stages = n_skip_stages
         self.depths.append(nf)
-        for n in range(self.n_stages - 1):
+        for _ in range(self.n_stages - 1):
             self.blocks.append(
                 NormConv2d(
                     nf,
@@ -800,11 +790,7 @@ class SkipConnectionEncoder(nn.Module):
         self.n_stages = n_stages if layers is None else len(layers)
         self.depths = []
         self.downs = []
-        if nf_first is None:
-            nf = 32
-        else:
-            nf = nf_first
-
+        nf = 32 if nf_first is None else nf_first
         if layers is not None:
             nf = layers[0]
 
@@ -870,7 +856,7 @@ class SkipConnectionEncoder(nn.Module):
 
 
 class Encoder(nn.Module):
-    def     __init__(self, nf_in, nf_max, n_stages, prepare_adain=False, variational=False, resnet_down=False, norm_layer = "in", layers=None):
+    def __init__(self, nf_in, nf_max, n_stages, prepare_adain=False, variational=False, resnet_down=False, norm_layer = "in", layers=None):
         super().__init__()
 
         self.prepare_adain = prepare_adain
@@ -878,19 +864,16 @@ class Encoder(nn.Module):
         if self.prepare_adain:
             assert not self.variational, "Encoder should not be variational if adain is prepared"
 
-        if self.prepare_adain:
             self.final_linear = nn.Linear(nf_max, nf_max)
 
         act = "elu" #if self.variational else "relu"
 
-        blocks = []
-        bottleneck = []
         nf = 32 if layers is None else layers[0]
-        blocks.append(
+        blocks = [
             Conv2dBlock(
                 nf_in, nf, 3, 2, norm=norm_layer, activation=act, padding=1
             )
-        )
+        ]
         n_stages = n_stages if layers is None else len(layers)
         for n in range(n_stages - 1):
             blocks.append(
@@ -908,7 +891,15 @@ class Encoder(nn.Module):
 
         self.resnet_down = resnet_down and self.prepare_adain
         self.nf_in_bn = nf
-        bottleneck.append(ResBlock(nf, nf_max,activation=act, stride=2 if self.resnet_down else 1, norm=norm_layer))
+        bottleneck = [
+            ResBlock(
+                nf,
+                nf_max,
+                activation=act,
+                stride=2 if self.resnet_down else 1,
+                norm=norm_layer,
+            )
+        ]
         if layers is None:
             bottleneck.append(ResBlock(nf_max, nf_max,activation=act, stride=2 if self.resnet_down else 1, norm=norm_layer))
 
@@ -975,7 +966,7 @@ class AdaINDecoderEntangled(nn.Module):
 
 
 
-        for n in range(self.n_stages):
+        for _ in range(self.n_stages):
             self.affines.append(AdaINLinear(nf_in, int(nf // 2)))
             # upsampling adain layers
             self.blocks.append(
@@ -1015,7 +1006,7 @@ class AdaINDecoderDisentangled(nn.Module):
         # self.bottleneck_adain = bottleneck_adain
         self.in_block = ResBlock(nf, nf,)
 
-        for n in range(self.n_stages):
+        for _ in range(self.n_stages):
             self.affines.append(AdaINLinear(nf_in, int(nf // 2)))
             # upsampling adain layers
             self.blocks.append(
@@ -1083,8 +1074,7 @@ class SkipConnectionDecoder(nn.Module):
 
         if del_shape:
             assert not shape
-        out = self.out_conv(x)
-        return out
+        return self.out_conv(x)
 class DecoderEntangled(nn.Module):
     """
     We sample up from spatial resolution 16x16, given quadratic images
@@ -1099,7 +1089,7 @@ class DecoderEntangled(nn.Module):
         nf = nf_in
         self.in_block = ResBlock(nf, nf)
 
-        for n in range(self.n_stages):
+        for _ in range(self.n_stages):
             self.blocks.append(
                 ResBlock(nf, int(nf // 2), norm="in", upsampling=True)
             )

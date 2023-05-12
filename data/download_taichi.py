@@ -40,7 +40,7 @@ def run(data):
         download(video_id.split('#')[0], args)
 
     if not os.path.exists(os.path.join(args.video_folder, video_id.split('#')[0] + '.mp4')):
-        print('Can not load video %s, broken link' % video_id.split('#')[0])
+        print(f"Can not load video {video_id.split('#')[0]}, broken link")
         return
     reader = imageio.get_reader(os.path.join(args.video_folder, video_id.split('#')[0] + '.mp4'))
     fps = reader.get_meta_data()['fps']
@@ -71,10 +71,7 @@ def run(data):
         None
 
     for entry in all_chunks_dict:
-        if 'person_id' in df:
-            first_part = df['person_id'].iloc[0] + "#"
-        else:
-            first_part = ""
+        first_part = df['person_id'].iloc[0] + "#" if 'person_id' in df else ""
         first_part = first_part + '#'.join(video_id.split('#')[::-1])
         path = first_part + '#' + str(entry['start']).zfill(6) + '#' + str(entry['end']).zfill(6) + '.mp4'
         save(os.path.join(args.out_folder, partition, path), entry['frames'], args.format)
@@ -105,5 +102,5 @@ if __name__ == "__main__":
     video_ids = set(df['video_id'])
     pool = Pool(processes=args.workers)
     args_list = cycle([args])
-    for chunks_data in tqdm(pool.imap_unordered(run, zip(video_ids, args_list))):
+    for _ in tqdm(pool.imap_unordered(run, zip(video_ids, args_list))):
         None

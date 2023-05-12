@@ -94,7 +94,7 @@ def vgg_loss(custom_vgg:PerceptualVGG, target, pred, weights=None):
             loss = get_member(custom_vgg,"loss_weights")[VGGOutput._fields[i]] * torch.mean(
                 torch.abs(tf - pf)
             ).unsqueeze(dim=-1)
-            losses.update({names[i]: loss})
+            losses[names[i]] = loss
     else:
 
         losses = {
@@ -109,7 +109,7 @@ def vgg_loss(custom_vgg:PerceptualVGG, target, pred, weights=None):
                 torch.abs(tf - pf)
             ).unsqueeze(dim=-1)
 
-            losses.update({names[i + 1]: loss})
+            losses[names[i + 1]] = loss
 
     return losses
 
@@ -138,12 +138,21 @@ class PixelDynamicsLoss(nn.Module):
         self.diff_pp = diff_pp
 
     def forward(self,target_t,target_tk,pred_t,pred_tk):
-        if self.diff_pp:
-            loss = (((target_t-target_tk).abs()-(pred_t.detach()-pred_tk).abs()).mean())**2
-        else:
-            loss = ((target_t-target_tk).abs().mean()-(pred_t.detach()-pred_tk).abs().mean())**2
-
-        return loss
+        return (
+            (
+                (
+                    (target_t - target_tk).abs()
+                    - (pred_t.detach() - pred_tk).abs()
+                ).mean()
+            )
+            ** 2
+            if self.diff_pp
+            else (
+                (target_t - target_tk).abs().mean()
+                - (pred_t.detach() - pred_tk).abs().mean()
+            )
+            ** 2
+        )
 
 def pixel_triplet_loss(target_t,target_tk,pred_t, pred_tk,vgg:PerceptualVGG,layerwise = True, detach=True, diff_pp=False):
     """
@@ -158,43 +167,51 @@ def pixel_triplet_loss(target_t,target_tk,pred_t, pred_tk,vgg:PerceptualVGG,laye
     :param diff_pp: whether to consider differences for each spatial location in each channel or average over all (default average)
     :return:
     """
-    if layerwise:
-        losses = {}
-        # old_device = target_tk.get_device()
-        # new_device = list(vgg.parameters())[0].get_device()
+    if not layerwise:
+        return (
+            vgg_loss_agg(vgg, pred_t.detach(), pred_tk)
+            - vgg_loss_agg(vgg, target_t, target_tk)
+        ) ** 2
 
-        # timestep t
-        # target_t = target_t.cuda(new_device)
-        # pred_t = pred_t.cuda(new_device)
-        target_feats_t = vgg(target_t.cuda())
-        pred_feats_t = vgg(pred_t.detach() if detach else pred_t)
-        target_feats_t = VGGOutput(**{key: target_feats_t[key] for key in VGGOutput._fields})
-        pred_feats_t = VGGOutput(**{key: pred_feats_t[key] for key in VGGOutput._fields})
+    losses = {}
+    # old_device = target_tk.get_device()
+    # new_device = list(vgg.parameters())[0].get_device()
 
-        # timestep tk
-        # target_tk = target_tk.cuda(new_device)
-        # pred_tk = pred_tk.cuda(new_device)
-        target_feats_tk = vgg(target_tk)
-        pred_feats_tk = vgg(pred_tk)
-        target_feats_tk = VGGOutput(**{key: target_feats_tk[key] for key in VGGOutput._fields})
-        pred_feats_tk = VGGOutput(**{key: pred_feats_tk[key] for key in VGGOutput._fields})
+    # timestep t
+    # target_t = target_t.cuda(new_device)
+    # pred_t = pred_t.cuda(new_device)
+    target_feats_t = vgg(target_t.cuda())
+    pred_feats_t = vgg(pred_t.detach() if detach else pred_t)
+    target_feats_t = VGGOutput(**{key: target_feats_t[key] for key in VGGOutput._fields})
+    pred_feats_t = VGGOutput(**{key: pred_feats_t[key] for key in VGGOutput._fields})
 
-        names = list(pred_feats_t._asdict().keys())
-        for i, (tft, pft, tftk, pftk) in enumerate(zip(target_feats_t, pred_feats_t,target_feats_tk, pred_feats_tk)):
-            if diff_pp:
-                loss = get_member(vgg,"loss_weights")[VGGOutput._fields[i]] * torch.mean((torch.abs(tft - tftk) - torch.abs(pft - pftk)) ** 2).unsqueeze(dim=-1)
-            else:
-                loss = get_member(vgg,"loss_weights")[VGGOutput._fields[i]] * (torch.mean(torch.abs(tft - tftk)).unsqueeze(dim=-1) - torch.mean(torch.abs(pft - pftk)).unsqueeze(dim=-1))**2
+    # timestep tk
+    # target_tk = target_tk.cuda(new_device)
+    # pred_tk = pred_tk.cuda(new_device)
+    target_feats_tk = vgg(target_tk)
+    pred_feats_tk = vgg(pred_tk)
+    target_feats_tk = VGGOutput(**{key: target_feats_tk[key] for key in VGGOutput._fields})
+    pred_feats_tk = VGGOutput(**{key: pred_feats_tk[key] for key in VGGOutput._fields})
 
-            losses.update({names[i]: loss})
+    names = list(pred_feats_t._asdict().keys())
+    for i, (tft, pft, tftk, pftk) in enumerate(zip(target_feats_t, pred_feats_t,target_feats_tk, pred_feats_tk)):
+        loss = (
+            get_member(vgg, "loss_weights")[VGGOutput._fields[i]]
+            * torch.mean(
+                (torch.abs(tft - tftk) - torch.abs(pft - pftk)) ** 2
+            ).unsqueeze(dim=-1)
+            if diff_pp
+            else get_member(vgg, "loss_weights")[VGGOutput._fields[i]]
+            * (
+                torch.mean(torch.abs(tft - tftk)).unsqueeze(dim=-1)
+                - torch.mean(torch.abs(pft - pftk)).unsqueeze(dim=-1)
+            )
+            ** 2
+        )
+        losses[names[i]] = loss
 
-        loss_tensor = torch.stack([losses[key] for key in losses], dim=0, )
-        ptl = loss_tensor.sum() #.cuda(old_device)
-
-    else:
-        ptl = (vgg_loss_agg(vgg, pred_t.detach(), pred_tk) - vgg_loss_agg(vgg, target_t, target_tk)) ** 2
-
-    return ptl
+    loss_tensor = torch.stack([losses[key] for key in losses], dim=0, )
+    return loss_tensor.sum()
 
 def style_loss(vgg,style_target, pred):
     target_feats = vgg(style_target)
@@ -211,7 +228,7 @@ def style_loss(vgg,style_target, pred):
         tf = tf.reshape(*shape[:2],-1)
         gram_diff = 1. / (shape[1]*shape[2]*shape[3]) * (torch.matmul(pf,pf.permute(0,2,1)) - torch.matmul(tf,tf.permute(0,2,1)))
         loss = (torch.norm(gram_diff, p="fro",dim=[1,2])**2).mean()
-        style_outs.update({names[i]:loss})
+        style_outs[names[i]] = loss
 
     style_outs = torch.stack([style_outs[key] for key in style_outs])
     return style_outs.sum()
@@ -228,14 +245,10 @@ class DynamicsLoss(nn.Module):
 
 
     def forward(self, anchor, positive, negative, ):
-        if isinstance(anchor,list) and isinstance(positive,list):
-            losses = []
-            for a,p in zip(anchor,positive):
-                losses.append(self.mse(a,p))
-
-            return torch.stack(losses).mean()
-        else:
+        if not isinstance(anchor, list) or not isinstance(positive, list):
             return self.mse(anchor,positive)
+        losses = [self.mse(a,p) for a, p in zip(anchor,positive)]
+        return torch.stack(losses).mean()
 
 def kl_loss_check(latents):
     """

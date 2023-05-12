@@ -32,7 +32,7 @@ class BaseDataset(Dataset, LoggingParent):
         LoggingParent.__init__(self)
 
         # list of keys for the data that shall be retained
-        assert len(datakeys) > 0
+        assert datakeys
         self.datakeys = datakeys
         # torchvision.transforms
         self.transforms = transforms
@@ -46,17 +46,19 @@ class BaseDataset(Dataset, LoggingParent):
         # self.valid_lags = np.unique(self.config["valid_lags"]) if "valid_lags" in self.config else list(range(6))
 
 
-        self.yield_videos = self.config["yield_videos"] if "yield_videos" in self.config else False
+        self.yield_videos = self.config.get("yield_videos", False)
 
         # everything, which has to deal with variable sequence lengths
         self.var_sequence_length = self.config["var_sequence_length"] if "var_sequence_length" in self.config and self.yield_videos else False
-        self.longest_seq_weight = self.config["longest_seq_weight"] if "longest_seq_weight" in self.config else None
-        self.scale_poke_to_res = self.config["scale_poke_to_res"] if "scale_poke_to_res" in self.config else False
+        self.longest_seq_weight = self.config.get("longest_seq_weight", None)
+        self.scale_poke_to_res = self.config.get("scale_poke_to_res", False)
         if self.scale_poke_to_res:
             self.logger.info(f'Scaling flows and pokes to dataset resolution, which is {self.config["spatial_size"]}')
 
         self.logger.info(f'Dataset is yielding {"videos" if self.yield_videos else "images"}.')
-        self.poke_size = self.config["poke_size"] if "poke_size" in self.config else self.config["spatial_size"][0] / 128 * 10
+        self.poke_size = self.config.get(
+            "poke_size", self.config["spatial_size"][0] / 128 * 10
+        )
         if "poke" in self.datakeys:
             self.logger.info(f"Poke size is {self.poke_size}.")
 
@@ -65,31 +67,31 @@ class BaseDataset(Dataset, LoggingParent):
         self.flow_width_factor = None
 
         # whether fancy appearance augmentation shall be used or not
-        self.fancy_aug = self.config["fancy_aug"] if "fancy_aug" in self.config else False
+        self.fancy_aug = self.config.get("fancy_aug", False)
 
         # flow weighting, if intended to be enabled
-        self.flow_weights = self.config["flow_weights"] if "flow_weights" in self.config else False
-        self.weight_value_flow = self.config["foreground_value"] if "foreground_value" in self.config else 1.
-        self.weight_value_poke = self.config["poke_value"] if "poke_value" in self.config else 1.
-        self.weight_value_bg = self.config["background_weight"] if "background_weight" in self.config else 1.
+        self.flow_weights = self.config.get("flow_weights", False)
+        self.weight_value_flow = self.config.get("foreground_value", 1.)
+        self.weight_value_poke = self.config.get("poke_value", 1.)
+        self.weight_value_bg = self.config.get("background_weight", 1.)
 
         # whether to use only one value in for poke or the complete flow field within that patch
-        self.equal_poke_val = self.config["equal_poke_val"] if "equal_poke_val" in self.config else True
+        self.equal_poke_val = self.config.get("equal_poke_val", True)
 
         # Whether or not to normalize the flow values
-        self.normalize_flows = self.config["normalize_flows"] if "normalize_flows" in self.config else False
+        self.normalize_flows = self.config.get("normalize_flows", False)
         # Whether to weight different objects (i.e. samples with different object_ids) the way that the should be yield equally often (recommended for imbalanced datasets)
-        self.obj_weighting = self.config["object_weighting"] if "object_weighting" in self.config else False
+        self.obj_weighting = self.config.get("object_weighting", False)
 
-        self.p_col= self.config["p_col"] if "p_col" in self.config else 0
-        self.p_geom = self.config["p_geom"] if "p_geom" in self.config else 0
-        self.ab = self.config["augment_b"] if "augment_b" in self.config else 0
-        self.ac = self.config["augment_c"] if "augment_c" in self.config else 0
-        self.ah = self.config["augment_h"] if "augment_h" in self.config else 0
-        self.a_s = self.config["augment_s"] if "augment_s" in self.config else 0
-        self.ad = self.config["aug_deg"] if "aug_deg" in self.config else 0
-        self.at = self.config["aug_trans"] if "aug_trans" in self.config else (0,0)
-        self.use_lanczos = self.config["use_lanczos"] if "use_lanczos" in self.config else False
+        self.p_col = self.config.get("p_col", 0)
+        self.p_geom = self.config.get("p_geom", 0)
+        self.ab = self.config.get("augment_b", 0)
+        self.ac = self.config.get("augment_c", 0)
+        self.ah = self.config.get("augment_h", 0)
+        self.a_s = self.config.get("augment_s", 0)
+        self.ad = self.config.get("aug_deg", 0)
+        self.at = self.config.get("aug_trans", (0, 0))
+        self.use_lanczos = self.config.get("use_lanczos", False)
 
         self.pre_T = T.ToPILImage()
         self.z1_normalize = "01_normalize" in self.config and self.config["01_normalize"]
@@ -136,7 +138,7 @@ class BaseDataset(Dataset, LoggingParent):
         }
 
 
-        self.max_frames = self.config["max_frames"] if "max_frames" in self.config else 1
+        self.max_frames = self.config.get("max_frames", 1)
 
         self.augment = self.config["augment_wo_dis"] if ("augment_wo_dis" in self.config and self.train) else False
         self.color_transfs = None
@@ -200,7 +202,7 @@ class BaseDataset(Dataset, LoggingParent):
 
         sidx = int(np.random.choice(np.flatnonzero(self.datadict["vid"] == self.datadict["vid"][idx[0]]), 1))
         tr_vid = int(np.random.choice(self.datadict["vid"][self.datadict["vid"] != self.datadict["vid"][idx[0]]], 1))
-        for i in range(self.max_trials_flow_load):
+        for _ in range(self.max_trials_flow_load):
             self.mask = {}
             try:
                 self._get_mask(idx)
@@ -246,11 +248,7 @@ class BaseDataset(Dataset, LoggingParent):
         else:
             if index == -1:
                 length = -1
-                if self.obj_weighting:
-                    index = int(np.random.choice(np.arange(self.datadict["object_id"].shape[0]),p=self.datadict["weights"],size=1))
-                else:
-                    index = int(np.random.choice(np.arange(self.datadict["object_id"].shape[0]), p=self.datadict["weights"], size=1))
-
+                index = int(np.random.choice(np.arange(self.datadict["object_id"].shape[0]),p=self.datadict["weights"],size=1))
             max_id_fid = self.sids_per_seq[self.datadict["vid"][index]] + self.datadict["max_fid"][index,self.valid_lags[0]] - 1
             start_id = min(min(index,self.datadict["seq_end_id"][index]-(self.max_frames* self.subsample_step) - 1),max_id_fid)
         return (start_id,length)
@@ -268,11 +266,8 @@ class BaseDataset(Dataset, LoggingParent):
     def _get_edge_image(self, ids, sample_idx, transforms=None, sample=False, use_fb_aug=False, **kwargs):
         imgs = []
 
-        if sample:
-            yield_ids = [sample_idx]
-        else:
-            yield_ids = self._get_yield_ids(ids)
-        for i,idx in enumerate(yield_ids):
+        yield_ids = [sample_idx] if sample else self._get_yield_ids(ids)
+        for idx in yield_ids:
             img_path = self.datadict["img_path"][idx]
             img = cv2.imread(img_path)
             # image is read in BGR
@@ -375,9 +370,15 @@ class BaseDataset(Dataset, LoggingParent):
         amplitude -= amplitude.min()
         amplitude /= amplitude.max()
 
-        # use only such regions where the amplitude is larger than mean + 1 * std
-        mask = torch.where(torch.gt(amplitude,amplitude.mean()+amplitude.std()),torch.ones_like(amplitude),torch.zeros_like(amplitude)).numpy().astype(np.bool)
-        return mask
+        return (
+            torch.where(
+                torch.gt(amplitude, amplitude.mean() + amplitude.std()),
+                torch.ones_like(amplitude),
+                torch.zeros_like(amplitude),
+            )
+            .numpy()
+            .astype(np.bool)
+        )
 
     def _get_mask(self,ids):
 

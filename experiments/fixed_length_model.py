@@ -41,9 +41,8 @@ class FixedLengthModel(Experiment):
 
         self.use_gan = self.config["gan"]["use"]
         self.use_temp_disc = self.config["gan_temp"]["use"]
-        if self.use_temp_disc:
-            if not self.config["gan_temp"]["patch_temp_disc"]:
-                assert not self.config["gan_temp"]["conditional"]
+        if self.use_temp_disc and not self.config["gan_temp"]["patch_temp_disc"]:
+            assert not self.config["gan_temp"]["conditional"]
         #self.pixel_decoder_loss = self.config["training"]["pixel_dynamics_weight"] > 0
         self.lr_dec_t = 0
         self.target_dev = None

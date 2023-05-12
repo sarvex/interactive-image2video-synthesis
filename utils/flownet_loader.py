@@ -53,9 +53,8 @@ class FlownetPipeline:
         # Cast to proper shape (Batch x BGR x #Img x H x W)
         s = img.shape
         img, img2 = img[:, :int(s[1] / 64) * 64, :int(s[2] / 64) * 64], \
-                    img2[:, :int(s[1] / 64) * 64,:int(s[2] / 64) * 64]
-        stacked = torch.cat([img[:, None], img2[:, None]], dim=1)
-        return stacked
+                        img2[:, :int(s[1] / 64) * 64,:int(s[2] / 64) * 64]
+        return torch.cat([img[:, None], img2[:, None]], dim=1)
 
     def predict(self, model, stacked, spatial_size=None):
         """
@@ -66,15 +65,14 @@ class FlownetPipeline:
         # predict
         model.eval()
         prediction = model(stacked)
-        out_size = float(prediction.shape[-1])
         if spatial_size is not None:
             prediction = F.interpolate(
                 prediction.cpu(), size=(spatial_size,spatial_size), mode="bilinear"
             )
+            out_size = float(prediction.shape[-1])
             # rescale to make it fit to new shape (not grave, if this is skipped as flow is normalized anyways later)
             prediction = prediction / (out_size / spatial_size)
-        flow = prediction[0]
-        return flow
+        return prediction[0]
 
     def show_results(self, prediction, with_ampl=False):
         """
@@ -111,8 +109,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # load test images in BGR mode
-    img, img2 = np.asarray(Image.open(f"/export/data/ablattma/Datasets/plants/processed/hoch_misc1/frame_0.png")), \
-                np.asarray(Image.open(f"/export/data/ablattma/Datasets/plants/processed/hoch_misc1/frame_100.png"))
+    img, img2 = np.asarray(
+        Image.open(
+            "/export/data/ablattma/Datasets/plants/processed/hoch_misc1/frame_0.png"
+        )
+    ), np.asarray(
+        Image.open(
+            "/export/data/ablattma/Datasets/plants/processed/hoch_misc1/frame_100.png"
+        )
+    )
 
     # load Flownet
     pipeline = FlownetPipeline()
